@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>活動報到系統</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-database-compat.js"></script>
+    <style>
+        body { background-color: #f4f7f6; font-family: "Microsoft JhengHei", sans-serif; display: flex; align-items: center; min-height: 100vh; }
+        .container { max-width: 400px; background: white; padding: 30px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); }
+        .logo-area { text-align: center; margin-bottom: 25px; }
+        .logo-area img { max-width: 150px; }
+        .btn-primary { background-color: #007bff; border: none; padding: 12px; border-radius: 10px; font-weight: bold; }
+        #success-view { display: none; text-align: center; }
+        .checkmark { font-size: 80px; color: #28a745; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div id="checkin-view">
+        <div class="logo-area">
+            <h4 id="display-title">歡迎報到</h4>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">身分別</label>
+            <select id="role" class="form-select">
+                <option value="學員">學員</option>
+                <option value="導師">導師</option>
+                <option value="共創/社群夥伴">共創/社群夥伴</option>
+                <option value="攜伴">攜伴</option>
+            </select>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">姓名</label>
+            <input type="text" id="name" class="form-control" placeholder="請輸入完整姓名">
+        </div>
+        <button class="btn btn-primary w-100" onclick="handleCheckIn()">送出報到</button>
+    </div>
+
+    <div id="supplement-view" style="display:none;">
+        <h5 class="text-danger mb-3">查無此人，請補充資訊</h5>
+        <div class="mb-3">
+            <label class="form-label">公司名稱</label>
+            <input type="text" id="company" class="form-control">
+        </div>
+        <button class="btn btn-warning w-100" onclick="submitSupplement()">完成報到</button>
+    </div>
+
+    <div id="success-view">
+        <div class="checkmark">✓</div>
+        <h3>報到成功</h3>
+        <p class="text-muted">祝您活動愉快！</p>
+    </div>
+</div>
+
+<script>
+    const firebaseConfig = {
+        apiKey: "AIzaSyAOP0elxmO2sYfIzEVfWL-wFSbKG6XjFL4",
+        authDomain: "aama-checkin-system.firebaseapp.com",
+        databaseURL: "https://aama-checkin-system-default-rtdb.asia-southeast1.firebasedatabase.app/",
+        projectId: "aama-checkin-system",
+        storageBucket: "aama-checkin-system.firebasestorage.app",
+        messagingSenderId: "979394114808",
+        appId: "1:979394114808:web:7be3eaaaf344f46526b70d"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    let currentUserData = null;
+    let currentKey = null;
+
+    function handleCheckIn() {
+        const inputName = document.getElementById('name').value.trim();
+        const inputRole = document.getElementById('role').value;
+
+        if(!inputName) return alert("請輸入姓名");
+
+        db.ref('participants').once('value', (snapshot) => {
+            let found = false;
+            snapshot.forEach((child) => {
+                const data = child.val();
+                // 模糊比對：移除空白後比對，或資料庫名稱包含輸入名稱
+                const dbName = (data.name || "").replace(/\s+/g, '');
+                const cleanInput = inputName.replace(/\s+/g, '');
+
+                if (dbName.includes(cleanInput) && data.role === inputRole) {
+                    found = true;
+                    currentKey = child.key;
+                    currentUserData = data;
+                }
+            });
+
+            if (found) {
+                // 比對成功
+                db.ref('participants/' + currentKey).update({
+                    checked: true,
+                    inputName: inputName,
+                    checkTime: new Date().toLocaleTimeString()
+                });
+                if(currentUserData.isVIP === "是") {
+                    sendChatMsg(`📢 VIP [${inputName}] 已抵達！`);
+                }
+                showSuccess();
+            } else {
+                // 比對失敗，進入補件
+                document.getElementById('checkin-view').style.display = 'none';
+                document.getElementById('supplement-view').style.display = 'block';
+            }
+        });
+    }
+
+    function submitSupplement() {
+        const name = document.getElementById('name').value;
+        const role = document.getElementById('role').value;
+        const company = document.getElementById('company').value;
+
+        const newRef = db.ref('participants').push();
+        newRef.set({
+            name: "",
+            inputName: name,
+            role: role,
+            company: company,
+            checked: true,
+            isVIP: "否",
+            note: "查無此人(手動新增)",
+            checkTime: new Date().toLocaleTimeString()
+        });
+        showSuccess();
+    }
+
+    function showSuccess() {
+        document.getElementById('checkin-view').style.display = 'none';
+        document.getElementById('supplement-view').style.display = 'none';
+        document.getElementById('success-view').style.display = 'block';
+    }
+
+    function sendChatMsg(msg) {
+        db.ref('chats').push({ user: "系統", msg: msg, time: new Date().toLocaleTimeString() });
+    }
+</script>
+</body>
+</html>

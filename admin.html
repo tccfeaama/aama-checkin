@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>AAMA 報到管理後台</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-database-compat.js"></script>
+    <style>
+        body { background: #f8f9fa; font-size: 14px; }
+        #login-page { height: 100vh; display: flex; justify-content: center; align-items: center; }
+        #admin-content { display: none; height: 100vh; flex-direction: column; }
+        .top-bar { height: 8.33vh; background: white; border-bottom: 1px solid #ddd; padding: 10px 20px; }
+        .main-container { flex: 1; display: flex; overflow: hidden; }
+        .list-section { width: 66.6%; overflow-y: auto; padding: 20px; }
+        .chat-section { width: 33.3%; border-left: 1px solid #ddd; background: white; display: flex; flex-direction: column; }
+        .chat-messages { flex: 1; overflow-y: auto; padding: 15px; background: #eee; }
+        .vip-row { background-color: #fff3f3 !important; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<div id="login-page">
+    <div class="card p-4 shadow" style="width: 350px;">
+        <h4 class="text-center mb-4">管理員登入</h4>
+        <input type="text" id="admin-user" class="form-control mb-3" placeholder="帳號">
+        <input type="password" id="admin-pass" class="form-control mb-3" placeholder="密碼">
+        <button class="btn btn-dark w-100" onclick="checkLogin()">登入</button>
+    </div>
+</div>
+
+<div id="admin-content">
+    <div class="top-bar d-flex justify-content-between align-items-center">
+        <div>
+            <button class="btn btn-sm btn-outline-primary" onclick="alert('請直接從 Firebase 匯入或手動新增')">匯入資料</button>
+            <button class="btn btn-sm btn-outline-secondary" onclick="exportData()">下載結果</button>
+            <button class="btn btn-sm btn-outline-danger" onclick="clearAll()">清除所有資料</button>
+        </div>
+        <div id="stats-board">
+            應到: <span id="s-total">0</span> | 已到: <span id="s-in">0</span> | VIP: <span id="s-vip">0</span>
+        </div>
+        <div>
+            <input type="text" id="search" placeholder="搜尋姓名..." oninput="renderList()">
+        </div>
+    </div>
+
+    <div class="main-container">
+        <div class="list-section">
+            <table class="table table-sm table-hover shadow-sm bg-white">
+                <thead class="table-dark">
+                    <tr>
+                        <th>No.</th><th>身分別</th><th>期數</th><th>填寫姓名</th><th>識別證姓名</th><th>公司</th><th>備註</th>
+                    </tr>
+                </thead>
+                <tbody id="p-list"></tbody>
+            </table>
+        </div>
+
+        <div class="chat-section">
+            <div class="p-2 border-bottom">即時通訊</div>
+            <div class="chat-messages" id="chat-msgs"></div>
+            <div class="p-2 border-top">
+                <div class="input-group">
+                    <input type="text" id="msg-input" class="form-control" placeholder="輸入訊息...">
+                    <button class="btn btn-primary" onclick="sendChat()">傳送</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const firebaseConfig = {
+        apiKey: "AIzaSyAOP0elxmO2sYfIzEVfWL-wFSbKG6XjFL4",
+        authDomain: "aama-checkin-system.firebaseapp.com",
+        databaseURL: "https://aama-checkin-system-default-rtdb.asia-southeast1.firebasedatabase.app/",
+        projectId: "aama-checkin-system",
+        storageBucket: "aama-checkin-system.firebasestorage.app",
+        messagingSenderId: "979394114808",
+        appId: "1:979394114808:web:7be3eaaaf344f46526b70d"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+    let allData = [];
+
+    function checkLogin() {
+        const u = document.getElementById('admin-user').value;
+        const p = document.getElementById('admin-pass').value;
+        if(u === 'aamatccfe' && p === 'aama77793991') {
+            document.getElementById('login-page').style.display = 'none';
+            document.getElementById('admin-content').style.display = 'flex';
+            startListening();
+        } else {
+            alert('錯誤');
+        }
+    }
+
+    function startListening() {
+        // 監聽參與者
+        db.ref('participants').on('value', (snapshot) => {
+            allData = [];
+            snapshot.forEach(c => { 
+                let d = c.val(); 
+                d.key = c.key; 
+                allData.push(d); 
+            });
+            renderList();
+        });
+
+        // 監聽聊天
+        db.ref('chats').limitToLast(20).on('value', (snapshot) => {
+            const box = document.getElementById('chat-msgs');
+            let html = '';
+            snapshot.forEach(c => {
+                const m = c.val();
+                html += `<div><small>[${m.time}]</small> <b>${m.user}:</b> ${m.msg}</div>`;
+            });
+            box.innerHTML = html;
+            box.scrollTop = box.scrollHeight;
+        });
+    }
+
+    function renderList() {
+        const list = document.getElementById('p-list');
+        const filter = document.getElementById('search').value.toLowerCase();
+        
+        // 只顯示已報到的，且依據 key 倒序 (最新在上面)
+        let displayData = allData.filter(d => d.checked && (d.inputName || "").toLowerCase().includes(filter)).reverse();
+
+        list.innerHTML = displayData.map((d, i) => `
+            <tr class="${d.isVIP === '是' ? 'vip-row' : ''}">
+                <td>${displayData.length - i}</td>
+                <td>${d.role}</td>
+                <td>${d.cohort || '-'}</td>
+                <td>${d.inputName || '-'}</td>
+                <td>${d.name || '-'}</td>
+                <td>${d.company || '-'}</td>
+                <td>${d.isVIP === '是' ? '★VIP ' : ''}${d.note || ''}</td>
+            </tr>
+        `).join('');
+
+        // 更新數據
+        document.getElementById('s-total').innerText = allData.length;
+        document.getElementById('s-in').innerText = allData.filter(d => d.checked).length;
+        document.getElementById('s-vip').innerText = allData.filter(d => d.checked && d.isVIP === '是').length;
+    }
+
+    function sendChat() {
+        const input = document.getElementById('msg-input');
+        if(!input.value) return;
+        db.ref('chats').push({ user: "報到台", msg: input.value, time: new Date().toLocaleTimeString() });
+        input.value = '';
+    }
+
+    function clearAll() {
+        if(confirm("確定要清空所有資料嗎？")) db.ref().remove();
+    }
+</script>
+</body>
+</html>

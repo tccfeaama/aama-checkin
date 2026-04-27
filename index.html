@@ -8,10 +8,11 @@
     <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-database-compat.js"></script>
     <style>
-        body { background-color: #f4f7f6; font-family: "Microsoft JhengHei", sans-serif; display: flex; align-items: center; min-height: 100vh; }
-        .container { max-width: 400px; background: white; padding: 30px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); }
-        .logo-area { text-align: center; margin-bottom: 25px; }
-        .logo-area img { max-width: 150px; }
+        body { background-color: #f4f7f6; font-family: "Microsoft JhengHei", sans-serif; display: flex; align-items: flex-start; justify-content: center; min-height: 100vh; margin: 0; }
+        .wrapper { width: 100%; max-width: 450px; margin-top: 20px; }
+        .banner-container { width: 100%; aspect-ratio: 16 / 9; background: #ddd; border-radius: 15px 15px 0 0; overflow: hidden; }
+        .banner-container img { width: 100%; height: 100%; object-fit: cover; }
+        .container { background: white; padding: 30px; border-radius: 0 0 15px 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); }
         .btn-primary { background-color: #007bff; border: none; padding: 12px; border-radius: 10px; font-weight: bold; }
         #success-view { display: none; text-align: center; }
         .checkmark { font-size: 80px; color: #28a745; }
@@ -19,40 +20,48 @@
 </head>
 <body>
 
-<div class="container">
-    <div id="checkin-view">
-        <div class="logo-area">
-            <h4 id="display-title">歡迎報到</h4>
-        </div>
-        <div class="mb-3">
-            <label class="form-label">身分別</label>
-            <select id="role" class="form-select">
-                <option value="學員">學員</option>
-                <option value="導師">導師</option>
-                <option value="共創/社群夥伴">共創/社群夥伴</option>
-                <option value="攜伴">攜伴</option>
-            </select>
-        </div>
-        <div class="mb-3">
-            <label class="form-label">姓名</label>
-            <input type="text" id="name" class="form-control" placeholder="請輸入完整姓名">
-        </div>
-        <button class="btn btn-primary w-100" onclick="handleCheckIn()">送出報到</button>
+<div class="wrapper">
+    <div class="banner-container">
+        <img id="main-banner" src="" alt="活動主視覺" onerror="this.src='https://via.placeholder.com/1600x900?text=AAMA+Event'">
     </div>
 
-    <div id="supplement-view" style="display:none;">
-        <h5 class="text-danger mb-3">查無此人，請補充資訊</h5>
-        <div class="mb-3">
-            <label class="form-label">公司名稱</label>
-            <input type="text" id="company" class="form-control">
-        </div>
-        <button class="btn btn-warning w-100" onclick="submitSupplement()">完成報到</button>
-    </div>
+    <div class="container">
+        <div id="checkin-view">
+            <div class="mb-3">
+                <label class="form-label">身分別</label>
+                <select id="role" class="form-select" onchange="toggleCohortField()">
+                    <option value="學員">學員</option>
+                    <option value="導師">導師</option>
+                    <option value="共創/社群夥伴">共創/社群夥伴</option>
+                    <option value="攜伴">攜伴</option>
+                </select>
+            </div>
+            
+            <div id="cohort-group" class="mb-3">
+                <label class="form-label">學員期數</label>
+                <input type="number" id="cohort" class="form-control" placeholder="請輸入阿拉伯數字 (例如: 14)">
+            </div>
 
-    <div id="success-view">
-        <div class="checkmark">✓</div>
-        <h3>報到成功</h3>
-        <p class="text-muted">祝您活動愉快！</p>
+            <div class="mb-3">
+                <label class="form-label">姓名</label>
+                <input type="text" id="name" class="form-control" placeholder="請輸入姓名或英文名">
+            </div>
+            <button class="btn btn-primary w-100" onclick="handleCheckIn()">送出報到</button>
+        </div>
+
+        <div id="supplement-view" style="display:none;">
+            <div class="mb-3">
+                <label class="form-label">請填寫您的公司名稱</label>
+                <input type="text" id="company" class="form-control">
+            </div>
+            <button class="btn btn-warning w-100" onclick="submitSupplement()">完成報到</button>
+        </div>
+
+        <div id="success-view">
+            <div class="checkmark">✓</div>
+            <h3>報到成功</h3>
+            <p class="text-muted">祝您活動愉快！</p>
+        </div>
     </div>
 </div>
 
@@ -69,43 +78,62 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
 
-    let currentUserData = null;
-    let currentKey = null;
+    // 監聽後台設定的主視覺
+    db.ref('config/bannerUrl').on('value', (snapshot) => {
+        if(snapshot.val()) document.getElementById('main-banner').src = snapshot.val();
+    });
+
+    function toggleCohortField() {
+        const role = document.getElementById('role').value;
+        document.getElementById('cohort-group').style.display = (role === '學員') ? 'block' : 'none';
+    }
 
     function handleCheckIn() {
-        const inputName = document.getElementById('name').value.trim();
+        const inputName = document.getElementById('name').value.trim().toLowerCase();
         const inputRole = document.getElementById('role').value;
+        const inputCohort = document.getElementById('cohort').value.trim();
 
         if(!inputName) return alert("請輸入姓名");
+        if(inputRole === '學員' && !inputCohort) return alert("學員請輸入期數");
 
         db.ref('participants').once('value', (snapshot) => {
             let found = false;
             snapshot.forEach((child) => {
                 const data = child.val();
-                // 模糊比對：移除空白後比對，或資料庫名稱包含輸入名稱
-                const dbName = (data.name || "").replace(/\s+/g, '');
-                const cleanInput = inputName.replace(/\s+/g, '');
+                if (data.checked) return; // 跳過已報到者
 
-                if (dbName.includes(cleanInput) && data.role === inputRole) {
+                const dbName = (data.name || "").toLowerCase();
+                const dbEngName = (data.englishName || "").toLowerCase();
+                
+                // 1. 姓名或英文名模糊比對
+                const nameMatch = dbName.includes(inputName) || dbEngName.includes(inputName);
+                
+                // 2. 身分比對
+                const roleMatch = data.role === inputRole;
+
+                // 3. 期數比對 (僅限學員)
+                let cohortMatch = true;
+                if (inputRole === '學員') {
+                    // 將資料庫期數中的數字提煉出來比對
+                    const dbCohortNum = String(data.cohort).replace(/[^0-9]/g, '');
+                    cohortMatch = dbCohortNum === inputCohort;
+                }
+
+                if (nameMatch && roleMatch && cohortMatch) {
                     found = true;
-                    currentKey = child.key;
-                    currentUserData = data;
+                    db.ref('participants/' + child.key).update({
+                        checked: true,
+                        inputName: document.getElementById('name').value,
+                        checkTime: new Date().getTime() // 使用 timestamp 排序
+                    });
+                    if(data.isVIP === "是") {
+                        db.ref('chats').push({ user: "系統", msg: `📢 VIP [${data.name}] 已抵達！`, time: new Date().toLocaleTimeString() });
+                    }
+                    showSuccess();
                 }
             });
 
-            if (found) {
-                // 比對成功
-                db.ref('participants/' + currentKey).update({
-                    checked: true,
-                    inputName: inputName,
-                    checkTime: new Date().toLocaleTimeString()
-                });
-                if(currentUserData.isVIP === "是") {
-                    sendChatMsg(`📢 VIP [${inputName}] 已抵達！`);
-                }
-                showSuccess();
-            } else {
-                // 比對失敗，進入補件
+            if (!found) {
                 document.getElementById('checkin-view').style.display = 'none';
                 document.getElementById('supplement-view').style.display = 'block';
             }
@@ -116,17 +144,18 @@
         const name = document.getElementById('name').value;
         const role = document.getElementById('role').value;
         const company = document.getElementById('company').value;
+        const cohort = document.getElementById('cohort').value;
 
-        const newRef = db.ref('participants').push();
-        newRef.set({
+        db.ref('participants').push({
             name: "",
             inputName: name,
             role: role,
             company: company,
+            cohort: cohort,
             checked: true,
             isVIP: "否",
-            note: "查無此人(手動新增)",
-            checkTime: new Date().toLocaleTimeString()
+            note: "手動補件",
+            checkTime: new Date().getTime()
         });
         showSuccess();
     }
@@ -135,10 +164,6 @@
         document.getElementById('checkin-view').style.display = 'none';
         document.getElementById('supplement-view').style.display = 'none';
         document.getElementById('success-view').style.display = 'block';
-    }
-
-    function sendChatMsg(msg) {
-        db.ref('chats').push({ user: "系統", msg: msg, time: new Date().toLocaleTimeString() });
     }
 </script>
 </body>

@@ -4,18 +4,22 @@
     <meta charset="UTF-8">
     <title>AAMA 報到管理後台</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-database-compat.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
-        body { background: #f8f9fa; font-size: 14px; }
-        #login-page { height: 100vh; display: flex; justify-content: center; align-items: center; }
-        #admin-content { display: none; height: 100vh; flex-direction: column; }
-        .top-bar { height: 8.33vh; background: white; border-bottom: 1px solid #ddd; padding: 10px 20px; }
+        body { background: #f8f9fa; font-size: 14px; height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
+        #login-page { flex: 1; display: flex; justify-content: center; align-items: center; }
+        #admin-content { display: none; flex: 1; flex-direction: column; overflow: hidden; }
+        .top-bar { background: white; border-bottom: 1px solid #ddd; padding: 10px 20px; }
         .main-container { flex: 1; display: flex; overflow: hidden; }
         .list-section { width: 66.6%; overflow-y: auto; padding: 20px; }
         .chat-section { width: 33.3%; border-left: 1px solid #ddd; background: white; display: flex; flex-direction: column; }
-        .chat-messages { flex: 1; overflow-y: auto; padding: 15px; background: #eee; }
+        .chat-messages { flex: 1; overflow-y: auto; padding: 15px; background: #f0f2f5; }
         .vip-row { background-color: #fff3f3 !important; font-weight: bold; }
+        .flash { animation: flash-animation 1s; }
+        @keyframes flash-animation { from { background-color: #ffeaa7; } to { background-color: transparent; } }
     </style>
 </head>
 <body>
@@ -30,43 +34,74 @@
 </div>
 
 <div id="admin-content">
-    <div class="top-bar d-flex justify-content-between align-items-center">
-        <div>
-            <button class="btn btn-sm btn-outline-primary" onclick="alert('請直接從 Firebase 匯入或手動新增')">匯入資料</button>
-            <button class="btn btn-sm btn-outline-secondary" onclick="exportData()">下載結果</button>
-            <button class="btn btn-sm btn-outline-danger" onclick="clearAll()">清除所有資料</button>
+    <div class="top-bar">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <div>
+                <input type="file" id="import-file" style="display:none" onchange="importExcel(this)">
+                <button class="btn btn-sm btn-primary" onclick="document.getElementById('import-file').click()">匯入名單 (Excel)</button>
+                <button class="btn btn-sm btn-success" onclick="exportExcel()">下載報到結果</button>
+                <button class="btn btn-sm btn-warning" data-bs-toggle="modal" data-bs-target="#manualAddModal">手動新增</button>
+                <button class="btn btn-sm btn-outline-danger" onclick="clearAll()">清空資料庫</button>
+            </div>
+            <div id="stats-board" class="fw-bold">
+                已到: <span id="s-in" class="text-primary">0</span> | VIP: <span id="s-vip" class="text-danger">0</span>
+            </div>
         </div>
-        <div id="stats-board">
-            應到: <span id="s-total">0</span> | 已到: <span id="s-in">0</span> | VIP: <span id="s-vip">0</span>
-        </div>
-        <div>
-            <input type="text" id="search" placeholder="搜尋姓名..." oninput="renderList()">
+        <div class="row g-2">
+            <div class="col-md-5">
+                <input type="text" id="banner-input" class="form-control form-control-sm" placeholder="主視覺圖片網址 (16:9)..." onchange="updateBanner(this.value)">
+            </div>
+            <div class="col-md-3">
+                <select id="role-filter" class="form-select form-select-sm" onchange="renderList()">
+                    <option value="">所有身分篩選</option>
+                    <option value="學員">學員</option>
+                    <option value="導師">導師</option>
+                    <option value="共創/社群夥伴">共創/社群夥伴</option>
+                    <option value="攜伴">攜伴</option>
+                </select>
+            </div>
+            <div class="col-md-4">
+                <input type="text" id="search" class="form-control form-control-sm" placeholder="搜尋姓名..." oninput="renderList()">
+            </div>
         </div>
     </div>
 
     <div class="main-container">
         <div class="list-section">
             <table class="table table-sm table-hover shadow-sm bg-white">
-                <thead class="table-dark">
+                <thead class="table-dark sticky-top">
                     <tr>
-                        <th>No.</th><th>身分別</th><th>期數</th><th>填寫姓名</th><th>識別證姓名</th><th>公司</th><th>備註</th>
+                        <th>No.</th><th>身分</th><th>期數</th><th>填寫姓名</th><th>識別證姓名</th><th>公司</th><th>備註</th>
                     </tr>
                 </thead>
                 <tbody id="p-list"></tbody>
             </table>
         </div>
-
         <div class="chat-section">
-            <div class="p-2 border-bottom">即時通訊</div>
+            <div class="p-2 border-bottom fw-bold">即時通訊</div>
             <div class="chat-messages" id="chat-msgs"></div>
             <div class="p-2 border-top">
                 <div class="input-group">
-                    <input type="text" id="msg-input" class="form-control" placeholder="輸入訊息...">
+                    <input type="text" id="msg-input" class="form-control" placeholder="傳送訊息...">
                     <button class="btn btn-primary" onclick="sendChat()">傳送</button>
                 </div>
             </div>
         </div>
     </div>
+</div>
+
+<div class="modal fade" id="manualAddModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">手動新增參與者</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <div class="mb-3"><label>身分別</label><select id="m-role" class="form-select"><option>學員</option><option>導師</option><option>共創/社群夥伴</option><option>攜伴</option></select></div>
+        <div class="mb-3"><label>姓名</label><input type="text" id="m-name" class="form-control"></div>
+        <div class="mb-3"><label>公司</label><input type="text" id="m-company" class="form-control"></div>
+      </div>
+      <div class="modal-footer"><button type="button" class="btn btn-primary" onclick="submitManualAdd()">匯入頁面</button></div>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -90,42 +125,35 @@
             document.getElementById('login-page').style.display = 'none';
             document.getElementById('admin-content').style.display = 'flex';
             startListening();
-        } else {
-            alert('錯誤');
-        }
+        } else { alert('登入失敗'); }
     }
 
     function startListening() {
-        // 監聽參與者
-        db.ref('participants').on('value', (snapshot) => {
+        db.ref('config/bannerUrl').once('value', s => document.getElementById('banner-input').value = s.val() || "");
+        db.ref('participants').on('value', (s) => {
             allData = [];
-            snapshot.forEach(c => { 
-                let d = c.val(); 
-                d.key = c.key; 
-                allData.push(d); 
-            });
+            s.forEach(c => { let d = c.val(); d.key = c.key; allData.push(d); });
             renderList();
         });
-
-        // 監聽聊天
-        db.ref('chats').limitToLast(20).on('value', (snapshot) => {
+        db.ref('chats').limitToLast(30).on('value', (s) => {
             const box = document.getElementById('chat-msgs');
             let html = '';
-            snapshot.forEach(c => {
-                const m = c.val();
-                html += `<div><small>[${m.time}]</small> <b>${m.user}:</b> ${m.msg}</div>`;
-            });
-            box.innerHTML = html;
-            box.scrollTop = box.scrollHeight;
+            s.forEach(c => { const m = c.val(); html += `<div class="mb-1"><small class="text-muted">[${m.time}]</small> <b>${m.user}:</b> ${m.msg}</div>`; });
+            box.innerHTML = html; box.scrollTop = box.scrollHeight;
         });
     }
 
     function renderList() {
         const list = document.getElementById('p-list');
-        const filter = document.getElementById('search').value.toLowerCase();
+        const search = document.getElementById('search').value.toLowerCase();
+        const roleFilter = document.getElementById('role-filter').value;
         
-        // 只顯示已報到的，且依據 key 倒序 (最新在上面)
-        let displayData = allData.filter(d => d.checked && (d.inputName || "").toLowerCase().includes(filter)).reverse();
+        // 依照報到時間倒序 (最新在上面)
+        let displayData = allData.filter(d => {
+            const matchSearch = (d.inputName || d.name || "").toLowerCase().includes(search);
+            const matchRole = roleFilter === "" || d.role === roleFilter;
+            return d.checked && matchSearch && matchRole;
+        }).sort((a, b) => (b.checkTime || 0) - (a.checkTime || 0));
 
         list.innerHTML = displayData.map((d, i) => `
             <tr class="${d.isVIP === '是' ? 'vip-row' : ''}">
@@ -135,14 +163,60 @@
                 <td>${d.inputName || '-'}</td>
                 <td>${d.name || '-'}</td>
                 <td>${d.company || '-'}</td>
-                <td>${d.isVIP === '是' ? '★VIP ' : ''}${d.note || ''}</td>
+                <td>${d.isVIP === '是' ? '<span class="badge bg-danger">VIP</span> ' : ''}${d.note || ''}</td>
             </tr>
         `).join('');
 
-        // 更新數據
-        document.getElementById('s-total').innerText = allData.length;
         document.getElementById('s-in').innerText = allData.filter(d => d.checked).length;
         document.getElementById('s-vip').innerText = allData.filter(d => d.checked && d.isVIP === '是').length;
+    }
+
+    function updateBanner(url) { db.ref('config').update({ bannerUrl: url }); }
+
+    function submitManualAdd() {
+        db.ref('participants').push({
+            role: document.getElementById('m-role').value,
+            name: "", inputName: document.getElementById('m-name').value,
+            company: document.getElementById('m-company').value,
+            checked: true, isVIP: "否", note: "管理員手動新增", checkTime: new Date().getTime()
+        });
+        bootstrap.Modal.getInstance(document.getElementById('manualAddModal')).hide();
+    }
+
+    function importExcel(input) {
+        const file = input.files[0];
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const data = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(data, {type: 'array'});
+            const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+            const jsonData = XLSX.utils.sheet_to_json(firstSheet);
+            
+            jsonData.forEach(row => {
+                db.ref('participants').push({
+                    name: row['姓名'] || row['name'] || "",
+                    englishName: row['英文名'] || row['englishName'] || "",
+                    role: row['身分別'] || row['role'] || "",
+                    cohort: row['學員期數'] || row['cohort'] || "",
+                    company: row['公司'] || row['company'] || "",
+                    isVIP: row['是否為 VIP'] || row['isVIP'] || "否",
+                    checked: false, note: row['備註'] || row['note'] || ""
+                });
+            });
+            alert('名單匯入成功！');
+        };
+        reader.readAsArrayBuffer(file);
+    }
+
+    function exportExcel() {
+        const exportData = allData.filter(d => d.checked).map(d => ({
+            "身分": d.role, "期數": d.cohort, "填寫姓名": d.inputName, 
+            "識別證姓名": d.name, "公司": d.company, "備註": d.note, "報到時間": new Date(d.checkTime).toLocaleString()
+        }));
+        const ws = XLSX.utils.json_to_sheet(exportData);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "報到結果");
+        XLSX.writeFile(wb, "AAMA_Checkin_Results.xlsx");
     }
 
     function sendChat() {
@@ -151,10 +225,8 @@
         db.ref('chats').push({ user: "報到台", msg: input.value, time: new Date().toLocaleTimeString() });
         input.value = '';
     }
-
-    function clearAll() {
-        if(confirm("確定要清空所有資料嗎？")) db.ref().remove();
-    }
+    
+    function clearAll() { if(confirm("確定要清空所有資料嗎？")) db.ref('participants').remove(); }
 </script>
 </body>
 </html>

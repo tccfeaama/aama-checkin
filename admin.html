@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>AAMA 報到管理系統 V4.0</title>
+    <title>AAMA 管理後台 V5.0</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-app-compat.js"></script>
@@ -17,6 +17,13 @@
         .list-section { width: 66.6%; overflow-y: auto; padding: 20px; }
         .chat-section { width: 33.3%; border-left: 1px solid #ddd; background: white; display: flex; flex-direction: column; }
         .chat-messages { flex: 1; overflow-y: auto; padding: 15px; background: #f1f3f5; }
+        
+        /* 身分別顏色 */
+        .badge-mentor { background-color: #FF9E3E; color: white; }
+        .badge-member { background-color: #0E7EE2; color: white; }
+        .badge-partner { background-color: #7FD221; color: white; }
+        .badge-guest { background-color: #E5E5E5; color: #333; }
+        
         .vip-row { background-color: #fff5f5 !important; border-left: 4px solid #ff4d4f; }
         .sticky-head { position: sticky; top: 0; z-index: 10; background: #212529; color: white; }
     </style>
@@ -39,7 +46,7 @@
                 <input type="file" id="import-file" style="display:none" onchange="importExcel(this)">
                 <button class="btn btn-sm btn-primary me-2" onclick="document.getElementById('import-file').click()">匯入名單</button>
                 <button class="btn btn-sm btn-success me-2" onclick="exportExcel()">下載結果</button>
-                <button class="btn btn-sm btn-warning me-2" data-bs-toggle="modal" data-bs-target="#manualAddModal">手動新增</button>
+                <button class="btn btn-sm btn-warning me-2" data-bs-toggle="modal" data-bs-target="#manualAddModal">半自動手動報到</button>
                 <button class="btn btn-sm btn-danger" onclick="clearAllWithTripleConfirm()">清空資料庫</button>
             </div>
             <div class="fs-5">
@@ -50,7 +57,7 @@
             <div class="col-md-5 d-flex gap-2">
                 <button class="btn btn-sm btn-outline-secondary text-nowrap" onclick="document.getElementById('banner-upload').click()">上傳 Banner</button>
                 <input type="file" id="banner-upload" style="display:none" accept="image/*" onchange="uploadImage(this)">
-                </div>
+            </div>
             <div class="col-md-3">
                 <select id="role-filter" class="form-select form-select-sm" onchange="renderList()">
                     <option value="">身分過濾: 全部</option>
@@ -61,7 +68,7 @@
                 </select>
             </div>
             <div class="col-md-4">
-                <input type="text" id="search" class="form-control form-control-sm" placeholder="搜尋姓名/公司..." oninput="renderList()">
+                <input type="text" id="search" class="form-control form-control-sm" placeholder="搜尋姓名/公司/資料庫姓名..." oninput="renderList()">
             </div>
         </div>
     </div>
@@ -71,7 +78,7 @@
             <table class="table table-hover bg-white border">
                 <thead class="sticky-head text-center">
                     <tr>
-                        <th width="50">No.</th><th width="100">身分</th><th width="80">期數</th><th>填寫姓名</th><th>資料庫姓名</th><th>公司</th><th>備註</th>
+                        <th width="50">No.</th><th width="120">身分</th><th width="80">期數</th><th>填寫姓名</th><th>資料庫姓名</th><th>公司</th><th>備註</th>
                     </tr>
                 </thead>
                 <tbody id="p-list" class="text-center"></tbody>
@@ -93,13 +100,27 @@
 <div class="modal fade" id="manualAddModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
-            <div class="modal-header"><h5 class="modal-title">手動新增參與者</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-header"><h5>半自動手動報到</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
             <div class="modal-body">
-                <div class="mb-3"><label>身分別</label><select id="m-role" class="form-select"><option>學員</option><option>導師</option><option>共創/社群夥伴</option><option>攜伴</option></select></div>
-                <div class="mb-3"><label>姓名</label><input type="text" id="m-name" class="form-control"></div>
-                <div class="mb-3"><label>公司</label><input type="text" id="m-company" class="form-control"></div>
+                <div class="mb-3">
+                    <label>第一步：選擇身分</label>
+                    <select id="m-role" class="form-select" onchange="updateManualOptions()">
+                        <option value="">請選擇...</option>
+                        <option>學員</option><option>導師</option><option>共創/社群夥伴</option><option>攜伴</option>
+                    </select>
+                </div>
+                <div id="m-cohort-group" class="mb-3" style="display:none;">
+                    <label>第二步：選擇期數</label>
+                    <select id="m-cohort" class="form-select" onchange="updateManualOptions()">
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label>最後：選擇人名 (支援輸入首字搜尋)</label>
+                    <input list="name-datalist" id="m-name-input" class="form-control" placeholder="輸入名字關鍵字...">
+                    <datalist id="name-datalist"></datalist>
+                </div>
             </div>
-            <div class="modal-footer"><button class="btn btn-primary w-100" onclick="submitManualAdd()">確認匯入並置頂</button></div>
+            <div class="modal-footer"><button class="btn btn-primary w-100" onclick="submitManualAdd()">確認報到</button></div>
         </div>
     </div>
 </div>
@@ -119,17 +140,14 @@
     let allData = [];
 
     function checkLogin() {
-        const u = document.getElementById('admin-user').value;
-        const p = document.getElementById('admin-pass').value;
-        if(u === 'aamatccfe' && p === 'aama77793991') {
+        if(document.getElementById('admin-user').value === 'aamatccfe' && document.getElementById('admin-pass').value === 'aama77793991') {
             document.getElementById('login-page').style.display = 'none';
             document.getElementById('admin-content').style.display = 'flex';
             startListening();
-        } else { alert('登入認證失敗！'); }
+        } else alert('驗證失敗');
     }
 
     function startListening() {
-        // 移除對 banner-input 的引用，直接監聽
         db.ref('participants').on('value', (s) => {
             allData = [];
             s.forEach(c => { let d = c.val(); d.key = c.key; allData.push(d); });
@@ -143,13 +161,25 @@
         });
     }
 
+    function getRoleBadge(role) {
+        const map = {
+            '導師': 'badge-mentor',
+            '學員': 'badge-member',
+            '共創/社群夥伴': 'badge-partner',
+            '攜伴': 'badge-guest'
+        };
+        return map[role] || 'bg-secondary';
+    }
+
     function renderList() {
         const list = document.getElementById('p-list');
         const search = document.getElementById('search').value.toLowerCase();
         const roleFilter = document.getElementById('role-filter').value;
         
         let filtered = allData.filter(d => {
-            const matchSearch = (d.inputName || d.name || d.company || "").toLowerCase().includes(search);
+            const matchSearch = (d.inputName || "").toLowerCase().includes(search) || 
+                              (d.name || "").toLowerCase().includes(search) || 
+                              (d.company || "").toLowerCase().includes(search);
             const matchRole = !roleFilter || d.role === roleFilter;
             return d.checked && matchSearch && matchRole;
         }).sort((a, b) => b.checkTime - a.checkTime);
@@ -157,7 +187,7 @@
         list.innerHTML = filtered.map((d, i) => `
             <tr class="${d.isVIP === '是' ? 'vip-row' : ''}">
                 <td>${filtered.length - i}</td>
-                <td><span class="badge bg-secondary">${d.role}</span></td>
+                <td><span class="badge ${getRoleBadge(d.role)}">${d.role}</span></td>
                 <td>${d.cohort || '-'}</td>
                 <td>${d.inputName || '-'}</td>
                 <td>${d.name || '-'}</td>
@@ -170,93 +200,108 @@
         document.getElementById('s-vip').innerText = allData.filter(d => d.checked && d.isVIP === '是').length;
     }
 
+    // 更新半自動選單選項
+    function updateManualOptions() {
+        const role = document.getElementById('m-role').value;
+        const cohortGroup = document.getElementById('m-cohort-group');
+        const cohortSelect = document.getElementById('m-cohort');
+        const datalist = document.getElementById('name-datalist');
+        
+        datalist.innerHTML = "";
+        
+        if (role === '學員') {
+            cohortGroup.style.display = 'block';
+            // 抓取名單中所有的期數
+            const cohorts = [...new Set(allData.filter(d => d.role === '學員').map(d => d.cohort))].sort();
+            if (cohortSelect.innerHTML === "" || cohortSelect.getAttribute('data-role') !== '學員') {
+                cohortSelect.innerHTML = '<option value="">請選擇期數...</option>' + cohorts.map(c => `<option value="${c}">${c}</option>`).join('');
+                cohortSelect.setAttribute('data-role', '學員');
+            }
+        } else {
+            cohortGroup.style.display = 'none';
+        }
+
+        const selectedCohort = cohortSelect.value;
+        // 過濾出符合條件且尚未報到的人
+        const filteredNames = allData.filter(d => {
+            if (d.checked) return false;
+            if (d.role !== role) return false;
+            if (role === '學員' && selectedCohort && d.cohort !== selectedCohort) return false;
+            return true;
+        });
+
+        datalist.innerHTML = filteredNames.map(d => `<option value="${d.name}">`).join('');
+    }
+
+    function submitManualAdd() {
+        const role = document.getElementById('m-role').value;
+        const nameInput = document.getElementById('m-name-input').value;
+        const selectedCohort = document.getElementById('m-cohort').value;
+
+        // 找尋資料庫中的該人
+        const person = allData.find(d => d.name === nameInput && d.role === role && (role !== '學員' || d.cohort === selectedCohort));
+
+        if (person) {
+            let remark = person.isRegistered === "否" ? "未報名！" : "管理員手動新增";
+            db.ref('participants/' + person.key).update({
+                checked: true,
+                inputName: person.name,
+                note: remark,
+                checkTime: Date.now()
+            });
+            alert("報到成功！");
+        } else {
+            alert("找不到該名單，請確認姓名與身分是否正確。");
+        }
+        
+        bootstrap.Modal.getInstance(document.getElementById('manualAddModal')).hide();
+    }
+
     function uploadImage(input) {
         const file = input.files[0];
         if (!file) return;
         const reader = new FileReader();
-        reader.onload = (e) => updateBanner(e.target.result);
+        reader.onload = (e) => db.ref('config').update({ bannerUrl: e.target.result });
         reader.readAsDataURL(file);
     }
 
-    function updateBanner(val) { db.ref('config').update({ bannerUrl: val }); }
-
-    function submitManualAdd() {
-        db.ref('participants').push({
-            role: document.getElementById('m-role').value,
-            name: "", inputName: document.getElementById('m-name').value,
-            company: document.getElementById('m-company').value,
-            checked: true, isVIP: "否", note: "管理員手動新增", checkTime: Date.now()
-        });
-        bootstrap.Modal.getInstance(document.getElementById('manualAddModal')).hide();
-        document.getElementById('m-name').value = ""; document.getElementById('m-company').value = "";
-    }
-
     function clearAllWithTripleConfirm() {
-        if(confirm("【第一層確認】確定要清空資料庫嗎？")) {
-            if(confirm("【第二層確認】所有報到紀錄將永久刪除，無法還原！您真的確定嗎？")) {
-                if(confirm("【第三層確認】最後一次警告。請確認是否要執行刪除動作？")) {
-                    db.ref('participants').remove();
-                    db.ref('chats').remove();
-                    alert("資料庫已完全清空。");
-                }
-            }
-        }
+        if(confirm("確定清空？")) if(confirm("將永久刪除，無法還原。確定？")) if(confirm("最後警告：確定執行？")) { db.ref('participants').remove(); db.ref('chats').remove(); alert("已清空"); }
     }
 
     function exportExcel() {
-        const data = allData.filter(d => d.checked).map(d => ({
-            "身分": d.role, "期數": d.cohort, "姓名": d.inputName, 
-            "資料庫對應姓名": d.name, "公司": d.company, "備註": d.note, "時間": new Date(d.checkTime).toLocaleString()
-        }));
+        const data = allData.filter(d => d.checked).map(d => ({ "身分": d.role, "期數": d.cohort, "姓名": d.inputName, "公司": d.company, "備註": d.note, "時間": new Date(d.checkTime).toLocaleString() }));
         const ws = XLSX.utils.json_to_sheet(data);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "報到名單");
-        XLSX.writeFile(wb, `AAMA_Results_${new Date().toLocaleDateString()}.xlsx`);
+        XLSX.writeFile(wb, `Results.xlsx`);
     }
 
     function importExcel(input) {
-        const file = input.files[0];
         const reader = new FileReader();
         reader.onload = (e) => {
-            try {
-                const data = new Uint8Array(e.target.result);
-                const workbook = XLSX.read(data, {type: 'array'});
-                const firstSheetName = workbook.SheetNames[0];
-                const firstSheet = workbook.Sheets[firstSheetName];
-                const jsonData = XLSX.utils.sheet_to_json(firstSheet);
-                if (jsonData.length === 0) {
-                    alert("檔案內似乎沒有資料！");
-                    return;
-                }
-                jsonData.forEach((row, index) => {
-                    const name = row['姓名'] || row['name'];
-                    const role = row['身分別'] || row['role'];
-                    if (!name || !role) return;
-                    db.ref('participants').push({
-                        name: name || "",
-                        englishName: row['英文名'] || row['englishName'] || "",
-                        role: role || "",
-                        cohort: row['學員期數'] || row['cohort'] || "",
-                        company: row['公司'] || row['company'] || "",
-                        isVIP: row['是否為 VIP'] || row['isVIP'] || "否",
-                        checked: false, 
-                        note: row['備註'] || row['note'] || "",
-                        checkTime: 0
-                    });
+            const workbook = XLSX.read(new Uint8Array(e.target.result), {type: 'array'});
+            XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]).forEach(r => {
+                db.ref('participants').push({
+                    name: r['姓名'] || r['name'] || "",
+                    englishName: r['英文名'] || r['englishName'] || "",
+                    role: r['身分別'] || r['role'] || "",
+                    cohort: r['學員期數'] || r['cohort'] || "",
+                    company: r['公司'] || r['company'] || "",
+                    isRegistered: r['是否有報名活動'] || r['isRegistered'] || "是",
+                    isVIP: r['是否為 VIP'] || r['isVIP'] || "否",
+                    checked: false, 
+                    note: r['備註'] || r['note'] || ""
                 });
-                alert(`名單匯入處理完成！`);
-            } catch (error) {
-                alert("讀取檔案失敗。");
-            }
+            });
+            alert('匯入完成');
         };
-        reader.readAsArrayBuffer(file);
+        reader.readAsArrayBuffer(input.files[0]);
     }
 
     function sendChat() {
         const val = document.getElementById('msg-input').value;
-        if(!val) return;
-        db.ref('chats').push({ user: "報到台", msg: val, time: new Date().toLocaleTimeString() });
-        document.getElementById('msg-input').value = "";
+        if(val) { db.ref('chats').push({ user: "報到台", msg: val, time: new Date().toLocaleTimeString() }); document.getElementById('msg-input').value = ""; }
     }
 </script>
 </body>

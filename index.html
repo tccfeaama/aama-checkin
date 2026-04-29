@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AAMA 活動報到 V5.0</title>
+    <title>AAMA 活動報到 V6.0</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-database-compat.js"></script>
@@ -55,11 +55,12 @@
         </form>
 
         <form id="supplement-form" style="display:none;" onsubmit="event.preventDefault(); submitSupplement();">
-            <div class="mb-4">
-                <label class="form-label required-label">請填寫您的公司名稱</label>
-                <input type="text" id="company" class="form-control" required placeholder="例如: AAMA 科技">
+            <div class="mb-4 text-center"><h5>未在名單內，請填寫補件資訊</h5></div>
+            <div class="mb-3">
+                <label class="form-label required-label">公司名稱</label>
+                <input type="text" id="company" class="form-control" required placeholder="例如: 某某科技">
             </div>
-            <button type="submit" class="btn btn-warning w-100">完成報到</button>
+            <button type="submit" class="btn btn-warning w-100">完成手動補件</button>
         </form>
 
         <div id="success-view">
@@ -100,14 +101,23 @@
         }
     }
 
+    // 發送 VIP 通知函數 (全域複用)
+    function notifyVIP(name) {
+        db.ref('chats').push({
+            user: "系統",
+            msg: `📢 VIP [${name}] 已報到！`,
+            time: new Date().toLocaleTimeString()
+        });
+    }
+
     function handleCheckIn() {
         const role = document.getElementById('role').value;
-        const nameInput = document.getElementById('name').value.trim().toLowerCase();
+        const rawInput = document.getElementById('name').value.trim();
+        const nameInput = rawInput.toLowerCase(); // 標準化小寫比對
         const cohortInput = document.getElementById('cohort').value.trim();
 
-        // 1. 期數限制檢查
-        if (role === '學員' && parseInt(cohortInput) < 1) {
-            alert("學員期數必須大於或等於 1");
+        if (role === '學員' && (parseInt(cohortInput) < 1 || !cohortInput)) {
+            alert("請輸入有效的學員期數");
             return;
         }
 
@@ -117,17 +127,19 @@
 
             snapshot.forEach((child) => {
                 const data = child.val();
+                const dbName = (data.name || "").trim().toLowerCase();
+                const dbEngName = (data.englishName || "").trim().toLowerCase();
                 
-                // 拆解中文與英文名
-                const dbNameFull = (data.name || "").toLowerCase();
-                const dbNames = dbNameFull.split(/[\s()]+/).filter(s => s); // 拆分空格與括號
+                // 邏輯升級：分詞比對 (處理 王小明 Kevin 這種情況)
+                // 只要資料庫中的名字「包含在」輸入中，或輸入中任何一段「等於」資料庫名字
+                const nameMatch = nameInput.includes(dbName) || nameInput.includes(dbEngName) || 
+                                  (dbName !== "" && dbName === nameInput) || 
+                                  (dbEngName !== "" && dbEngName === nameInput);
 
-                const nameMatch = dbNames.some(n => n.includes(nameInput)) || (data.englishName || "").toLowerCase().includes(nameInput);
                 const roleMatch = data.role === role;
                 let cohortMatch = true;
                 if (role === '學員') {
-                    const dbNum = String(data.cohort).replace(/[^0-9]/g, '');
-                    cohortMatch = dbNum === cohortInput;
+                    cohortMatch = String(data.cohort) === String(cohortInput);
                 }
 
                 if (nameMatch && roleMatch && cohortMatch) {
@@ -137,28 +149,23 @@
             });
 
             if (matchedUser) {
-                // 2. 重複報到檢查
                 if (matchedUser.checked) {
-                    alert("您已完成報到");
+                    alert("您已完成報到，請勿重複送出");
                     return;
                 }
 
-                // 3. 報名活動狀態與備註邏輯
                 let remark = matchedUser.isRegistered === "否" ? "未報名！" : (matchedUser.note || "");
 
                 db.ref('participants/' + matchedKey).update({
                     checked: true,
-                    inputName: document.getElementById('name').value,
+                    inputName: rawInput,
                     checkTime: Date.now(),
                     note: remark
                 });
 
-                if(matchedUser.isVIP === "是") {
-                    db.ref('chats').push({ user: "系統", msg: `📢 VIP [${matchedUser.name}] 已抵達！`, time: new Date().toLocaleTimeString() });
-                }
+                if(matchedUser.isVIP === "是") notifyVIP(matchedUser.name || rawInput);
                 showSuccess();
             } else {
-                // 未比對到名單
                 document.getElementById('checkin-form').style.display = 'none';
                 document.getElementById('supplement-form').style.display = 'block';
             }
@@ -166,10 +173,12 @@
     }
 
     function submitSupplement() {
+        const rawName = document.getElementById('name').value.trim();
+        const role = document.getElementById('role').value;
         db.ref('participants').push({
-            name: "",
-            inputName: document.getElementById('name').value,
-            role: document.getElementById('role').value,
+            name: rawName,
+            inputName: rawName,
+            role: role,
             company: document.getElementById('company').value,
             cohort: document.getElementById('cohort').value,
             checked: true,

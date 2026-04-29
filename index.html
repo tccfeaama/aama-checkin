@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AAMA 活動報到 V6.0</title>
+    <title>AAMA 活動報到 V7.0</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-database-compat.js"></script>
@@ -14,6 +14,7 @@
         .banner-container img { width: 100%; height: 100%; object-fit: cover; }
         .container-box { background: white; padding: 30px; border-radius: 0 0 15px 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); }
         .btn-primary { background-color: #0E7EE2; border: none; padding: 12px; border-radius: 10px; font-weight: bold; }
+        .btn-primary:hover { background-color: #0c69bc; }
         .btn-warning { padding: 12px; border-radius: 10px; font-weight: bold; }
         #success-view { display: none; text-align: center; padding: 40px 0; }
         .checkmark { font-size: 80px; color: #28a745; }
@@ -43,7 +44,7 @@
                 
                 <div id="cohort-group" class="mb-3" style="display:none;">
                     <label class="form-label required-label">學員期數</label>
-                    <input type="number" id="cohort" class="form-control" placeholder="輸入期數數字 (如: 14)">
+                    <input type="number" id="cohort" class="form-control" placeholder="輸入期數數字 (如: 14)" min="1">
                 </div>
 
                 <div class="mb-3">
@@ -55,7 +56,7 @@
         </form>
 
         <form id="supplement-form" style="display:none;" onsubmit="event.preventDefault(); submitSupplement();">
-            <div class="mb-4 text-center"><h5>未在名單內，請填寫補件資訊</h5></div>
+            <div class="mb-4 text-center"><h5>名單比對失敗，請填寫補件資訊</h5></div>
             <div class="mb-3">
                 <label class="form-label required-label">公司名稱</label>
                 <input type="text" id="company" class="form-control" required placeholder="例如: 某某科技">
@@ -92,32 +93,22 @@
         const role = document.getElementById('role').value;
         const cohortGroup = document.getElementById('cohort-group');
         const cohortInput = document.getElementById('cohort');
-        if (role === '學員') {
-            cohortGroup.style.display = 'block';
-            cohortInput.required = true;
-        } else {
-            cohortGroup.style.display = 'none';
-            cohortInput.required = false;
-        }
+        cohortGroup.style.display = (role === '學員') ? 'block' : 'none';
+        cohortInput.required = (role === '學員');
     }
 
-    // 發送 VIP 通知函數 (全域複用)
-    function notifyVIP(name) {
-        db.ref('chats').push({
-            user: "系統",
-            msg: `📢 VIP [${name}] 已報到！`,
-            time: new Date().toLocaleTimeString()
-        });
+    function triggerVipNotice(name) {
+        db.ref('chats').push({ user: "系統", msg: `📢 VIP [${name}] 已報到！`, time: new Date().toLocaleTimeString() });
     }
 
     function handleCheckIn() {
         const role = document.getElementById('role').value;
-        const rawInput = document.getElementById('name').value.trim();
-        const nameInput = rawInput.toLowerCase(); // 標準化小寫比對
+        const rawName = document.getElementById('name').value.trim();
         const cohortInput = document.getElementById('cohort').value.trim();
 
+        // 數值限制 >= 1
         if (role === '學員' && (parseInt(cohortInput) < 1 || !cohortInput)) {
-            alert("請輸入有效的學員期數");
+            alert("學員期數必須大於或等於 1");
             return;
         }
 
@@ -125,22 +116,18 @@
             let matchedUser = null;
             let matchedKey = null;
 
+            // V7.0 空格拆解邏輯：支援 王小明 Kevin 這種中間帶空格的輸入[cite: 9]
+            const inputParts = rawName.toLowerCase().split(/\s+/).filter(s => s);
+
             snapshot.forEach((child) => {
                 const data = child.val();
-                const dbName = (data.name || "").trim().toLowerCase();
-                const dbEngName = (data.englishName || "").trim().toLowerCase();
+                const dbName = (data.name || "").toLowerCase().trim();
+                const dbEngName = (data.englishName || "").toLowerCase().trim();
                 
-                // 邏輯升級：分詞比對 (處理 王小明 Kevin 這種情況)
-                // 只要資料庫中的名字「包含在」輸入中，或輸入中任何一段「等於」資料庫名字
-                const nameMatch = nameInput.includes(dbName) || nameInput.includes(dbEngName) || 
-                                  (dbName !== "" && dbName === nameInput) || 
-                                  (dbEngName !== "" && dbEngName === nameInput);
-
+                // 只要拆解出的任一部分匹配到資料庫的中文或英文名即可[cite: 9]
+                const nameMatch = inputParts.some(part => dbName.includes(part) || dbEngName.includes(part));
                 const roleMatch = data.role === role;
-                let cohortMatch = true;
-                if (role === '學員') {
-                    cohortMatch = String(data.cohort) === String(cohortInput);
-                }
+                let cohortMatch = (role === '學員') ? (String(data.cohort) === String(cohortInput)) : true;
 
                 if (nameMatch && roleMatch && cohortMatch) {
                     matchedUser = data;
@@ -149,21 +136,23 @@
             });
 
             if (matchedUser) {
+                // 重複報到檢查[cite: 9, 10]
                 if (matchedUser.checked) {
-                    alert("您已完成報到，請勿重複送出");
+                    alert("您已完成報到");
                     return;
                 }
 
+                // 備註邏輯：未報名狀態優先[cite: 9, 10]
                 let remark = matchedUser.isRegistered === "否" ? "未報名！" : (matchedUser.note || "");
 
                 db.ref('participants/' + matchedKey).update({
                     checked: true,
-                    inputName: rawInput,
+                    inputName: rawName,
                     checkTime: Date.now(),
                     note: remark
                 });
 
-                if(matchedUser.isVIP === "是") notifyVIP(matchedUser.name || rawInput);
+                if(matchedUser.isVIP === "是") triggerVipNotice(matchedUser.name || rawName);
                 showSuccess();
             } else {
                 document.getElementById('checkin-form').style.display = 'none';
@@ -174,11 +163,10 @@
 
     function submitSupplement() {
         const rawName = document.getElementById('name').value.trim();
-        const role = document.getElementById('role').value;
         db.ref('participants').push({
             name: rawName,
             inputName: rawName,
-            role: role,
+            role: document.getElementById('role').value,
             company: document.getElementById('company').value,
             cohort: document.getElementById('cohort').value,
             checked: true,

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AAMA 活動報到 V7.1</title>
+    <title>AAMA 活動報到 V7.2</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-database-compat.js"></script>
@@ -14,6 +14,7 @@
         .banner-container img { width: 100%; height: 100%; object-fit: cover; }
         .container-box { background: white; padding: 30px; border-radius: 0 0 15px 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); }
         .btn-primary { background-color: #0E7EE2; border: none; padding: 12px; border-radius: 10px; font-weight: bold; }
+        .btn-primary:hover { background-color: #0c69bc; }
         .btn-warning { padding: 12px; border-radius: 10px; font-weight: bold; }
         #success-view { display: none; text-align: center; padding: 40px 0; }
         .checkmark { font-size: 80px; color: #28a745; }
@@ -53,12 +54,12 @@
         </form>
 
         <form id="supplement-form" style="display:none;" onsubmit="event.preventDefault(); submitSupplement();">
-            <div class="mb-4 text-center"><h5>名單比對失敗，請填寫補件資訊</h5></div>
+            <div class="mb-4 text-center"><h5>請輸入公司資訊</h5></div>
             <div class="mb-3">
                 <label class="form-label required-label">公司名稱</label>
-                <input type="text" id="company" class="form-control" required>
+                <input type="text" id="company" class="form-control" required placeholder="例如: AAMA 科技">
             </div>
-            <button type="submit" class="btn btn-warning w-100">完成手動補件</button>
+            <button type="submit" class="btn btn-warning w-100">送出</button>
         </form>
 
         <div id="success-view">
@@ -101,8 +102,8 @@
         const rawName = document.getElementById('name').value.trim();
         const cohortInput = document.getElementById('cohort').value.trim();
 
-        if (role === '學員' && (!cohortInput || parseInt(cohortInput) < 1)) {
-            alert("請輸入正確期數 (需大於0)");
+        if (role === '學員' && (parseInt(cohortInput) < 1 || !cohortInput)) {
+            alert("學員期數必須大於或等於 1");[cite: 9, 10]
             return;
         }
 
@@ -110,17 +111,19 @@
             let matchedUser = null;
             let matchedKey = null;
 
-            // 核心修正：移除輸入中的所有空格進行比對[cite: 9]
+            // 解決空格問題：將輸入內容「徹底去空格」後比對[cite: 9, 12]
             const cleanInput = rawName.replace(/\s+/g, '').toLowerCase();
 
             snapshot.forEach((child) => {
                 const data = child.val();
                 const dbName = (data.name || "").replace(/\s+/g, '').toLowerCase();
                 const dbEngName = (data.englishName || "").replace(/\s+/g, '').toLowerCase();
-                const combinedDb = dbName + dbEngName;
+                
+                // 只要去空格後的內容互相包含，即判定成功[cite: 9, 12]
+                const nameMatch = (dbName !== "" && cleanInput.includes(dbName)) || 
+                                  (dbEngName !== "" && cleanInput.includes(dbEngName)) || 
+                                  (cleanInput !== "" && (dbName + dbEngName).includes(cleanInput));
 
-                // 雙向包含判定：處理 王小明Kevin 或 王小明 Kevin 等各種情況[cite: 9, 12]
-                const nameMatch = cleanInput.includes(dbName) || cleanInput.includes(dbEngName) || combinedDb.includes(cleanInput);
                 const roleMatch = data.role === role;
                 let cohortMatch = (role === '學員') ? (String(data.cohort) === String(cohortInput)) : true;
 
@@ -132,7 +135,7 @@
 
             if (matchedUser) {
                 if (matchedUser.checked) {
-                    alert("您已完成報到，請勿重複送出");[cite: 11]
+                    alert("您已完成報到");[cite: 11, 12]
                     return;
                 }
                 let remark = matchedUser.isRegistered === "否" ? "未報名！" : (matchedUser.note || "");
@@ -152,9 +155,10 @@
     }
 
     function submitSupplement() {
+        const rawName = document.getElementById('name').value.trim();
         db.ref('participants').push({
-            name: document.getElementById('name').value.trim(),
-            inputName: document.getElementById('name').value.trim(),
+            name: rawName,
+            inputName: rawName,
             role: document.getElementById('role').value,
             company: document.getElementById('company').value,
             cohort: document.getElementById('cohort').value,

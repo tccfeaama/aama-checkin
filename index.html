@@ -54,12 +54,12 @@
         </form>
 
         <form id="supplement-form" style="display:none;" onsubmit="event.preventDefault(); submitSupplement();">
-            <div class="mb-4 text-center"><h5>請輸入公司資訊</h5></div>
+            <div class="mb-4 text-center"><h5>名單比對失敗，請填寫補件資訊</h5></div>
             <div class="mb-3">
                 <label class="form-label required-label">公司名稱</label>
                 <input type="text" id="company" class="form-control" required placeholder="例如: AAMA 科技">
             </div>
-            <button type="submit" class="btn btn-warning w-100">送出</button>
+            <button type="submit" class="btn btn-warning w-100">完成手動補件</button>
         </form>
 
         <div id="success-view">
@@ -135,7 +135,7 @@
 
             if (matchedUser) {
                 if (matchedUser.checked) {
-                    alert("您已完成報到");[cite: 11, 12]
+                    alert("您已完成報到，請勿重複送出");[cite: 11, 12]
                     return;
                 }
                 let remark = matchedUser.isRegistered === "否" ? "未報名！" : (matchedUser.note || "");

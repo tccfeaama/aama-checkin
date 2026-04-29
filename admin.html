@@ -217,12 +217,31 @@
             }
         }
 
-        function clearAllWithTripleConfirm() {
-            if(confirm("確定重置報到？")) if(confirm("確定？")) if(confirm("最後警告？")) {
-                db.ref('participants').once('value', s => s.forEach(c => db.ref('participants/' + c.key).update({ checked: false, inputName: null, note: null, checkTime: null })));
-                db.ref('chats').remove(); alert("已重置");
+// V7.8 修正：完全刪除名單與訊息，確保畫面清空
+function clearAllWithTripleConfirm() {
+    if(confirm("確定要「完全刪除」所有匯入的名單與報到紀錄嗎？")) {
+        if(confirm("此操作將導致下方名單完全消失，需重新匯入 Excel 才能操作。確定？")) {
+            if(confirm("最後警告：按下確定後，名單與即時通訊將永久清空！")) {
+                
+                // 1. 完全刪除參與者節點 (participants)
+                db.ref('participants').remove()
+                    .then(() => {
+                        // 2. 完全刪除即時通訊節點 (chats)
+                        return db.ref('chats').remove();
+                    })
+                    .then(() => {
+                        alert("資料庫已完全清空，現在可以重新匯入新名單。");
+                        // 強制清空本地顯示數據，確保畫面即時更新
+                        allData = [];
+                        renderList(); 
+                    })
+                    .catch((error) => {
+                        alert("清空過程發生錯誤：" + error.message);
+                    });
             }
         }
+    }
+}
 
         function exportExcel() {
             const data = allData.filter(d => d.checked).map(d => ({ "身分": d.role, "期數": d.cohort, "姓名": d.inputName, "公司": d.company, "備註": d.note, "時間": new Date(d.checkTime).toLocaleString() }));

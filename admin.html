@@ -2,14 +2,14 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>AAMA 管理後台 V7.3</title>
+    <title>AAMA 管理後台 V7.6</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-database-compat.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
-        body { background: #f8f9fa; font-size: 14px; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+        body { background: #f8f9fa; font-size: 14px; height: 100vh; display: flex; flex-direction: column; overflow: hidden; margin: 0; }
         #login-page { flex: 1; display: flex; justify-content: center; align-items: center; }
         #admin-content { display: none; flex: 1; flex-direction: column; overflow: hidden; }
         .top-bar { background: white; border-bottom: 1px solid #ddd; padding: 15px 20px; }
@@ -39,11 +39,11 @@
 <div id="admin-content">
     <div class="top-bar">
         <div class="d-flex justify-content-between align-items-center mb-3">
-            <div>
+            <div class="btn-group gap-2">
                 <input type="file" id="import-file" style="display:none" onchange="importExcel(this)">
-                <button class="btn btn-sm btn-primary me-2" onclick="document.getElementById('import-file').click()">匯入名單</button>
-                <button class="btn btn-sm btn-success me-2" onclick="exportExcel()">下載結果</button>
-                <button class="btn btn-sm btn-warning me-2" data-bs-toggle="modal" data-bs-target="#manualCheckinModal">半自動手動報到</button>
+                <button class="btn btn-sm btn-primary" onclick="document.getElementById('import-file').click()">匯入名單</button>
+                <button class="btn btn-sm btn-success" onclick="exportExcel()">下載結果</button>
+                <button class="btn btn-sm btn-warning" data-bs-toggle="modal" data-bs-target="#manualCheckinModal">半自動手動報到</button>
                 <button class="btn btn-sm btn-danger" onclick="clearAllWithTripleConfirm()">清空資料庫</button>
             </div>
             <div class="fs-5 fw-bold">已到: <span id="s-in" class="text-primary">0</span> | VIP: <span id="s-vip" class="text-danger">0</span></div>
@@ -64,7 +64,6 @@
             </div>
         </div>
     </div>
-
     <div class="main-container">
         <div class="list-section">
             <table class="table table-hover bg-white border text-center">
@@ -92,20 +91,16 @@
         <div class="modal-content">
             <div class="modal-header"><h5>連動式半自動報到</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
             <div class="modal-body">
-                <div class="mb-3">
-                    <label>步驟一：選擇身分</label>
+                <div class="mb-3"><label>步驟一：選擇身分</label>
                     <select id="m-role" class="form-select" onchange="onManualRoleChange()">
                         <option value="">請選擇...</option>
                         <option>導師</option><option>學員</option><option>共創/社群夥伴</option><option>攜伴</option>
                     </select>
                 </div>
-                <div id="m-cohort-group" class="mb-3" style="display:none;">
-                    <label>步驟二：選擇期數</label>
+                <div id="m-cohort-group" class="mb-3" style="display:none;"><label>步驟二：選擇期數</label>
                     <select id="m-cohort" class="form-select" onchange="updateNameOptions()"></select>
                 </div>
-                <div class="mb-3">
-                    <label>步驟三：選擇姓名 (僅顯示未報到名單)</label>
-                    <!-- 修改為 select 以強制選單化，避免學員手動輸入 -->
+                <div class="mb-3"><label>最後：選擇人員 (僅顯示未報到名單)</label>
                     <select id="m-name-select" class="form-select"></select>
                 </div>
             </div>
@@ -115,18 +110,20 @@
 </div>
 
 <script>
-    const firebaseConfig = {
-        apiKey: "AIzaSyAOP0elxmO2sYfIzEVfWL-wFSbKG6XjFL4",
-        authDomain: "aama-checkin-system.firebaseapp.com",
-        databaseURL: "https://aama-checkin-system-default-rtdb.asia-southeast1.firebasedatabase.app/",
-        projectId: "aama-checkin-system",
-        storageBucket: "aama-checkin-system.firebasestorage.app",
-        messagingSenderId: "979394114808",
-        appId: "1:979394114808:web:7be3eaaaf344f46526b70d"
+    let db, allData = [];
+    window.onload = function() {
+        const firebaseConfig = {
+            apiKey: "AIzaSyAOP0elxmO2sYfIzEVfWL-wFSbKG6XjFL4",
+            authDomain: "aama-checkin-system.firebaseapp.com",
+            databaseURL: "https://aama-checkin-system-default-rtdb.asia-southeast1.firebasedatabase.app/",
+            projectId: "aama-checkin-system",
+            storageBucket: "aama-checkin-system.firebasestorage.app",
+            messagingSenderId: "979394114808",
+            appId: "1:979394114808:web:7be3eaaaf344f46526b70d"
+        };
+        firebase.initializeApp(firebaseConfig);
+        db = firebase.database();
     };
-    firebase.initializeApp(firebaseConfig);
-    const db = firebase.database();
-    let allData = [];
 
     function checkLogin() {
         const u = document.getElementById('admin-user').value;
@@ -134,7 +131,7 @@
         if(u === 'aamatccfe' && p === 'aama77793991') {
             document.getElementById('login-page').style.display = 'none';
             document.getElementById('admin-content').style.display = 'flex';
-            startListening(); // 登入成功後才開啟監聽，防止 Banner 卡死登入
+            startListening();
         } else alert('登入失敗');
     }
 
@@ -211,15 +208,15 @@
             let note = person.isRegistered === "否" ? "未報名！" : "管理員手動新增";
             db.ref('participants/' + person.key).update({ checked: true, inputName: person.name, note: note, checkTime: Date.now() });
             if(person.isVIP === "是") db.ref('chats').push({ user: "系統", msg: `📢 VIP [${person.name}] 已報到！ (手動)`, time: new Date().toLocaleTimeString() });
-            alert("報到成功！");
+            alert("成功！");
             bootstrap.Modal.getInstance(document.getElementById('manualCheckinModal')).hide();
-        } else alert("請先選取人員");
+        }
     }
 
     function clearAllWithTripleConfirm() {
-        if(confirm("【一】確定重置報到狀態？")) if(confirm("【二】無法還原。確定？")) if(confirm("【三】最後警告：確定執行？")) {
+        if(confirm("確定重置報到？")) if(confirm("確定？")) if(confirm("最後警告？")) {
             db.ref('participants').once('value', s => s.forEach(c => db.ref('participants/' + c.key).update({ checked: false, inputName: null, note: null, checkTime: null })));
-            db.ref('chats').remove(); alert("已重置狀態");
+            db.ref('chats').remove(); alert("已重置");
         }
     }
 
@@ -259,11 +256,11 @@
 
     function uploadImage(input) {
         const file = input.files[0];
-        if (file && file.size < 1024 * 1024) { // 限制 1MB
+        if (file && file.size < 800 * 1024) {
             const reader = new FileReader();
             reader.onload = (e) => db.ref('config').update({ bannerUrl: e.target.result });
             reader.readAsDataURL(file);
-        } else alert("圖片請小於 1MB");
+        } else alert("請將圖片壓縮至 800KB 以下");
     }
 </script>
 </body>

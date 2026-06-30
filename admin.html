@@ -2,18 +2,41 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>AAMA 管理後台 V7.8</title>
+    <title>AAMA 管理後台 V8.4</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         body { background: #f8f9fa; font-size: 14px; height: 100vh; display: flex; flex-direction: column; overflow: hidden; margin: 0; }
         #login-page { flex: 1; display: flex; justify-content: center; align-items: center; }
         #admin-content { display: none; flex: 1; flex-direction: column; overflow: hidden; }
-        .top-bar { background: white; border-bottom: 1px solid #ddd; padding: 15px 20px; }
+        
+        /* 頂部控制列美化 */
+        .top-bar { background: white; border-bottom: 1px solid #e9ecef; padding: 20px 25px; box-shadow: 0 2px 8px rgba(0,0,0,0.03); }
+        
+        /* 現代感按鈕樣式 */
+        .btn-modern { border-radius: 8px; font-weight: 600; padding: 7px 16px; border: none; transition: all 0.2s ease; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        .btn-modern:hover { transform: translateY(-1px); box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        .btn-primary-m { background: linear-gradient(135deg, #0E7EE2, #0b6bc0); color: white; }
+        .btn-success-m { background: linear-gradient(135deg, #28a745, #218838); color: white; }
+        .btn-outline-success-m { border: 1px solid #28a745; color: #28a745; background: white; }
+        .btn-outline-success-m:hover { background: #28a745; color: white; }
+        .btn-warning-m { background: linear-gradient(135deg, #ffc107, #e0a800); color: #212529; }
+        .btn-danger-m { background: linear-gradient(135deg, #dc3545, #bd2130); color: white; }
+        .btn-secondary-m { background: linear-gradient(135deg, #f1f3f5, #e9ecef); color: #495057; border: 1px solid #ced4da; }
+        .btn-secondary-m:hover { background: #dfe2e6; }
+
+        /* 數據卡片儀表板化 */
+        .stat-card { background: white; border-radius: 12px; padding: 10px 20px; display: flex; align-items: center; gap: 15px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); border-left: 5px solid; min-width: 150px; }
+        .stat-card-in { border-left-color: #0E7EE2; background: linear-gradient(to right, #ffffff, #f0f7ff); }
+        .stat-card-vip { border-left-color: #dc3545; background: linear-gradient(to right, #ffffff, #fff5f5); }
+        .stat-title { font-size: 12px; color: #6c757d; font-weight: bold; text-transform: uppercase; margin: 0; }
+        .stat-number { font-size: 24px; font-weight: 800; margin: 0; line-height: 1; }
+        .stat-icon { font-size: 22px; }
+
+        /* 基礎表格與聊天室結構 */
         .main-container { flex: 1; display: flex; overflow: hidden; }
         .list-section { width: 66.6%; overflow-y: auto; padding: 20px; }
         .chat-section { width: 33.3%; border-left: 1px solid #ddd; background: white; display: flex; flex-direction: column; }
         .chat-messages { flex: 1; overflow-y: auto; padding: 15px; background: #f1f3f5; }
-        /* 身分別色票規範 */
         .badge-mentor { background-color: #FF9E3E; color: white; }
         .badge-member { background-color: #0E7EE2; color: white; }
         .badge-partner { background-color: #7FD221; color: white; }
@@ -37,25 +60,55 @@
     <!-- 管理後台主內容結構 -->
     <div id="admin-content">
         <div class="top-bar">
-            <div class="d-flex justify-content-between align-items-center mb-3">
-                <div class="btn-group gap-2">
+            <!-- 按鈕位置重新調整：清空移至最左邊 -->
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div class="d-flex gap-2 align-items-center">
+                    <!-- 1. 清空資料庫 (移至最左側第一順位) -->
+                    <button class="btn btn-modern btn-danger-m" onclick="clearAllWithTripleConfirm()">清空資料庫</button>
+
+                    <!-- 2. 匯入名單 -->
                     <input type="file" id="import-file" style="display:none" onchange="importExcel(this)">
-                    <button class="btn btn-sm btn-primary" onclick="document.getElementById('import-file').click()">匯入名單</button>
-                    <button class="btn btn-sm btn-success" onclick="exportExcel()">下載結果</button>
-                    <button class="btn btn-sm btn-warning" data-bs-toggle="modal" data-bs-target="#manualCheckinModal">半自動手動報到</button>
-                    <button class="btn btn-sm btn-danger" onclick="clearAllWithTripleConfirm()">清空資料庫</button>
-                </div>
-                <div class="fs-5 fw-bold">已到: <span id="s-in" class="text-primary">0</span> | VIP: <span id="s-vip" class="text-danger">0</span></div>
-            </div>
-            <div class="row g-2 align-items-center">
-                <div class="col-md-5 d-flex gap-2">
-                    <button class="btn btn-sm btn-outline-secondary" onclick="document.getElementById('banner-upload').click()">上傳 Banner</button>
+                    <button class="btn btn-modern btn-primary-m" onclick="document.getElementById('import-file').click()">匯入名單</button>
+                    
+                    <!-- 3. 上傳 Banner -->
                     <input type="file" id="banner-upload" style="display:none" accept="image/*" onchange="uploadImage(this)">
+                    <button class="btn btn-modern btn-secondary-m" onclick="document.getElementById('banner-upload').click()">上傳 Banner</button>
+
+                    <!-- 4. 下載已報到 -->
+                    <button class="btn btn-modern btn-success-m" onclick="exportExcel()">下載已報到</button>
+                    
+                    <!-- 5. 匯出未報到 -->
+                    <button class="btn btn-modern btn-outline-success-m" onclick="exportUncheckedExcel()">匯出未報到</button>
+                    
+                    <!-- 6. 手動/補件報到 -->
+                    <button class="btn btn-modern btn-warning-m" data-bs-toggle="modal" data-bs-target="#manualCheckinModal">手動/補件報到</button>
                 </div>
+                
+                <!-- 人數顯示：大字級儀表板氣泡卡片 -->
+                <div class="d-flex gap-3">
+                    <div class="stat-card stat-card-in">
+                        <div class="stat-icon">👥</div>
+                        <div>
+                            <p class="stat-title">已到人數</p>
+                            <p class="stat-number text-primary" id="s-in">0</p>
+                        </div>
+                    </div>
+                    <div class="stat-card stat-card-vip">
+                        <div class="stat-icon">👑</div>
+                        <div>
+                            <p class="stat-title">VIP 到場</p>
+                            <p class="stat-number text-danger" id="s-vip">0</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 下方搜尋與過濾列 (已改為 justify-content-start 置左對齊) -->
+            <div class="row justify-content-start g-2 align-items-center">
                 <div class="col-md-3">
                     <select id="role-filter" class="form-select form-select-sm" onchange="renderList()">
                         <option value="">身分過濾: 全部</option>
-                        <option value="導師">導師</option><option value="學員">學員</option><option value="共創/社群夥伴">共創/社群夥伴</option><option value="攜伴">攜伴</option>
+                        <option value="導師/顧問">導師/顧問</option><option value="學員">學員</option><option value="共創/社群夥伴">共創/社群夥伴</option><option value="隨行人員">隨行人員</option>
                     </select>
                 </div>
                 <div class="col-md-4">
@@ -63,11 +116,13 @@
                 </div>
             </div>
         </div>
+        
         <div class="main-container">
             <div class="list-section">
                 <table class="table table-hover bg-white border text-center">
                     <thead class="sticky-head">
-                        <tr><th width="50">No.</th><th width="120">身分</th><th width="80">期數</th><th>填寫姓名</th><th>資料庫姓名</th><th>公司</th><th>備註</th></tr>
+                        <!-- 欄位名稱優化：將原本的「資料庫姓名」精確命名為「參與者中文姓名」 -->
+                        <tr><th width="50">No.</th><th width="100">身分</th><th width="70">期數</th><th width="100">識別證號</th><th>參與者中文姓名</th><th>公司</th><th>備註</th></tr>
                     </thead>
                     <tbody id="p-list"></tbody>
                 </table>
@@ -85,31 +140,49 @@
         </div>
     </div>
 
-    <!-- 手動報到彈窗 -->
+    <!-- 雙模式手動報到彈窗 -->
     <div class="modal fade" id="manualCheckinModal" tabindex="-1">
         <div class="modal-dialog">
             <div class="modal-content">
-                <div class="modal-header"><h5>連動式半自動報到</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                <div class="modal-header"><h5>手動 / 臨時新增報到</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
                 <div class="modal-body">
-                    <div class="mb-3"><label>步驟一：選擇身分</label>
+                    <div class="mb-3 border-bottom pb-2">
+                        <label class="fw-bold mb-2">操作模式選擇：</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="checkinMode" id="mode1" value="dropdown" checked onchange="toggleManualMode()">
+                            <label class="form-check-label text-primary" for="mode1">名單內報到 (連動式下拉選單)</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="checkinMode" id="mode2" value="text" onchange="toggleManualMode()">
+                            <label class="form-check-label text-danger" for="mode2">臨時名單新增 (手動打字輸入)</label>
+                        </div>
+                    </div>
+                    <div class="mb-3"><label>選擇身分</label>
                         <select id="m-role" class="form-select" onchange="onManualRoleChange()">
                             <option value="">請選擇...</option>
-                            <option>導師</option><option>學員</option><option>共創/社群夥伴</option><option>攜伴</option>
+                            <option>導師/顧問</option><option>學員</option><option>共創/社群夥伴</option><option>隨行人員</option>
                         </select>
                     </div>
-                    <div id="m-cohort-group" class="mb-3" style="display:none;"><label>步驟二：選擇期數</label>
+                    <div id="m-cohort-group" class="mb-3" style="display:none;"><label>選擇期數</label>
                         <select id="m-cohort" class="form-select" onchange="updateNameOptions()"></select>
                     </div>
-                    <div class="mb-3"><label>最後：選擇人員</label>
+                    <div id="mode1-area" class="mb-3"><label>選擇人員 (僅顯示尚未報到者)</label>
                         <select id="m-name-select" class="form-select"></select>
                     </div>
+                    <div id="mode2-area" class="mb-3" style="display:none;">
+                        <div class="mb-3"><label>輸入公司名稱</label>
+                            <input type="text" id="m-company-input" class="form-control" placeholder="公司/組織名稱">
+                        </div>
+                        <div class="mb-3"><label>輸入參與者姓名</label>
+                            <input type="text" id="m-name-text" class="form-control" placeholder="真實姓名">
+                        </div>
+                    </div>
                 </div>
-                <div class="modal-footer"><button class="btn btn-primary w-100" onclick="submitManualCheckin()">確認報到</button></div>
+                <div class="modal-footer"><button class="btn btn-primary w-100" onclick="submitManualCheckin()">確認送出</button></div>
             </div>
         </div>
     </div>
 
-    <!-- 腳本置底，確保 DOM 已準備就緒[cite: 5] -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-database-compat.js"></script>
@@ -118,13 +191,13 @@
     <script>
         let db, allData = [];
         const firebaseConfig = {
-            apiKey: "AIzaSyAOP0elxmO2sYfIzEVfWL-wFSbKG6XjFL4",
-            authDomain: "aama-checkin-system.firebaseapp.com",
-            databaseURL: "https://aama-checkin-system-default-rtdb.asia-southeast1.firebasedatabase.app/",
-            projectId: "aama-checkin-system",
-            storageBucket: "aama-checkin-system.firebasestorage.app",
-            messagingSenderId: "979394114808",
-            appId: "1:979394114808:web:7be3eaaaf344f46526b70d"
+          apiKey: "AIzaSyDvyQzuEo-r93LboQqW3fsVtls0N3JoQLc",
+          authDomain: "aama-checkin-system-e7019.firebaseapp.com",
+          databaseURL: "https://aama-checkin-system-e7019-default-rtdb.asia-southeast1.firebasedatabase.app",
+          projectId: "aama-checkin-system-e7019",
+          storageBucket: "aama-checkin-system-e7019.firebasestorage.app",
+          messagingSenderId: "634288046034",
+          appId: "1:634288046034:web:4dff59ee9be7981fdbd20b"
         };
         firebase.initializeApp(firebaseConfig);
         db = firebase.database();
@@ -163,13 +236,14 @@
                 const matchRole = !roleFilter || d.role === roleFilter;
                 return d.checked && matchSearch && matchRole;
             }).sort((a, b) => b.checkTime - a.checkTime);
+            
             document.getElementById('p-list').innerHTML = filtered.map((d, i) => `
                 <tr class="${d.isVIP === '是' ? 'vip-row' : ''}">
                     <td>${filtered.length - i}</td>
                     <td><span class="badge ${getRoleClass(d.role)}">${d.role}</span></td>
                     <td>${d.cohort || '-'}</td>
-                    <td>${d.inputName || '-'}</td>
-                    <td>${d.name || '-'}</td>
+                    <td><span class="fw-bold">${d.badgeNumber || '-'}</span></td>
+                    <td>${d.name || d.inputName || '-'}</td>
                     <td>${d.company || '-'}</td>
                     <td>${d.isVIP === '是' ? '<span class="text-danger fw-bold">★VIP</span> ' : ''}${d.note || ''}</td>
                 </tr>
@@ -179,8 +253,20 @@
         }
 
         function getRoleClass(role) {
-            const map = { '導師': 'badge-mentor', '學員': 'badge-member', '共創/社群夥伴': 'badge-partner', '攜伴': 'badge-guest' };
+            const map = { '導師/顧問': 'badge-mentor', '學員': 'badge-member', '共創/社群夥伴': 'badge-partner', '隨行人員': 'badge-guest' };
             return map[role] || 'bg-secondary';
+        }
+
+        function toggleManualMode() {
+            const mode = document.querySelector('input[name="checkinMode"]:checked').value;
+            if (mode === 'dropdown') {
+                document.getElementById('mode1-area').style.display = 'block';
+                document.getElementById('mode2-area').style.display = 'none';
+                updateNameOptions();
+            } else {
+                document.getElementById('mode1-area').style.display = 'none';
+                document.getElementById('mode2-area').style.display = 'block';
+            }
         }
 
         function onManualRoleChange() {
@@ -204,51 +290,83 @@
         }
 
         function submitManualCheckin() {
+            const mode = document.querySelector('input[name="checkinMode"]:checked').value;
             const role = document.getElementById('m-role').value;
-            const name = document.getElementById('m-name-select').value;
             const cohort = document.getElementById('m-cohort').value;
-            const person = allData.find(d => d.name === name && d.role === role && (role !== '學員' || String(d.cohort) === cohort));
-            if (person) {
-                let note = person.isRegistered === "否" ? "未報名！" : "管理員手動新增";
-                db.ref('participants/' + person.key).update({ checked: true, inputName: person.name, note: note, checkTime: Date.now() });
-                if(person.isVIP === "是") db.ref('chats').push({ user: "系統", msg: `📢 VIP [${person.name}] 已報到！`, time: new Date().toLocaleTimeString() });
-                alert("成功！");
-                bootstrap.Modal.getInstance(document.getElementById('manualCheckinModal')).hide();
+
+            if (!role) { alert("請先選擇身分"); return; }
+            if (role === '學員' && !cohort) { alert("請先選擇期數"); return; }
+
+            if (mode === 'dropdown') {
+                const name = document.getElementById('m-name-select').value;
+                if (!name) { alert("請選擇人員"); return; }
+                const person = allData.find(d => d.name === name && d.role === role && (role !== '學員' || String(d.cohort) === cohort));
+                
+                if (person) {
+                    let note = person.isRegistered === "否" ? "未報名！" : "管理員手動新增";
+                    if (role === '隨行人員' && person.note) note = person.note + " (管理員手動)"; 
+
+                    db.ref('participants/' + person.key).update({ checked: true, inputName: person.name, note: note, checkTime: Date.now() });
+                    if(person.isVIP === "是") db.ref('chats').push({ user: "系統", msg: `📢 VIP [${person.name}] 已報到！ (手動)`, time: new Date().toLocaleTimeString() });
+                    alert("名單報到成功！");
+                }
+            } else {
+                const company = document.getElementById('m-company-input').value.trim();
+                const textName = document.getElementById('m-name-text').value.trim();
+                if (!textName) { alert("請輸入參與者姓名"); return; }
+                
+                db.ref('participants').push({
+                    name: textName,
+                    inputName: textName,
+                    role: role,
+                    company: company,
+                    cohort: cohort,
+                    checked: true, 
+                    isVIP: "否", 
+                    note: "管理員臨時新增", 
+                    isRegistered: "否",
+                    checkTime: Date.now()
+                });
+                alert("臨時新增成功！");
             }
+            bootstrap.Modal.getInstance(document.getElementById('manualCheckinModal')).hide();
         }
 
-// V7.8 修正：完全刪除名單與訊息，確保畫面清空
-function clearAllWithTripleConfirm() {
-    if(confirm("確定要「完全刪除」所有匯入的名單與報到紀錄嗎？")) {
-        if(confirm("此操作將導致下方名單完全消失，需重新匯入 Excel 才能操作。確定？")) {
-            if(confirm("最後警告：按下確定後，名單與即時通訊將永久清空！")) {
-                
-                // 1. 完全刪除參與者節點 (participants)
-                db.ref('participants').remove()
-                    .then(() => {
-                        // 2. 完全刪除即時通訊節點 (chats)
-                        return db.ref('chats').remove();
-                    })
-                    .then(() => {
-                        alert("資料庫已完全清空，現在可以重新匯入新名單。");
-                        // 強制清空本地顯示數據，確保畫面即時更新
-                        allData = [];
-                        renderList(); 
-                    })
-                    .catch((error) => {
-                        alert("清空過程發生錯誤：" + error.message);
-                    });
+        function clearAllWithTripleConfirm() {
+            if(confirm("【第一層確認】確定要「完全刪除」所有匯入的名單與紀錄嗎？")) {
+                if(confirm("【第二層確認】此操作將導致下方名單消失，需重新匯入 Excel 才能操作。確定？")) {
+                    if(confirm("【第三層確認】最後警告：按下確定後，名單將永久清空！")) {
+                        db.ref('participants').remove().then(() => db.ref('chats').remove()).then(() => {
+                            alert("已完全清空，可重新匯入新名單。");
+                            allData = []; renderList(); 
+                        });
+                    }
+                }
             }
         }
-    }
-}
 
         function exportExcel() {
-            const data = allData.filter(d => d.checked).map(d => ({ "身分": d.role, "期數": d.cohort, "姓名": d.inputName, "公司": d.company, "備註": d.note, "時間": new Date(d.checkTime).toLocaleString() }));
+            const data = allData.filter(d => d.checked).map(d => ({ 
+                "身分": d.role, "期數": d.cohort, "識別證號": d.badgeNumber, "姓名": d.inputName, 
+                "公司": d.company, "備註": d.note, "時間": new Date(d.checkTime).toLocaleString() 
+            }));
             const ws = XLSX.utils.json_to_sheet(data);
             const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, "報到結果");
-            XLSX.writeFile(wb, "AAMA_Results.xlsx");
+            XLSX.utils.book_append_sheet(wb, ws, "已報到結果");
+            XLSX.writeFile(wb, "AAMA_CheckedIn.xlsx");
+        }
+
+        function exportUncheckedExcel() {
+            const data = allData.filter(d => !d.checked && d.isRegistered === "是").map(d => ({ 
+                "身分": d.role, "期數": d.cohort, "識別證號": d.badgeNumber, 
+                "姓名": d.name, "英文名": d.englishName, "公司": d.company, "備註": d.note
+            }));
+            if(data.length === 0) { alert("目前沒有符合條件的未報到名單！"); return; }
+            
+            const ws = XLSX.utils.json_to_sheet(data);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "未報到名單");
+            XLSX.writeFile(wb, "AAMA_Unchecked_List.xlsx");
         }
 
         function importExcel(input) {
@@ -261,9 +379,11 @@ function clearAllWithTripleConfirm() {
                         englishName: String(r['英文名'] || r['englishName'] || "").trim(),
                         role: r['身分別'] || r['role'] || "",
                         cohort: r['學員期數'] || r['cohort'] || "",
+                        badgeNumber: String(r['識別證編號'] || r['badgeNumber'] || "").trim(),
                         company: r['公司'] || r['company'] || "",
                         isRegistered: r['是否有報名活動'] || r['isRegistered'] || "是",
                         isVIP: r['是否為 VIP'] || r['isVIP'] || "否",
+                        note: String(r['備註'] || r['note'] || ""),
                         checked: false
                     });
                 });

@@ -3,8 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AAMA 活動報到 V7.7</title>
+    <title>AAMA 活動報到 V8.1</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-database-compat.js"></script>
     <style>
         body { background-color: #f4f7f6; font-family: "Microsoft JhengHei", sans-serif; display: flex; align-items: flex-start; justify-content: center; min-height: 100vh; margin: 0; }
         .wrapper { width: 100%; max-width: 450px; margin-top: 20px; padding: 10px; }
@@ -34,9 +36,9 @@
                         <select id="role" class="form-select" required onchange="toggleCohortField()">
                             <option value="" disabled selected>請選擇身分</option>
                             <option value="學員">學員</option>
-                            <option value="導師">導師</option>
+                            <option value="導師/顧問">導師/顧問</option>
                             <option value="共創/社群夥伴">共創/社群夥伴</option>
-                            <option value="攜伴">攜伴</option>
+                            <option value="隨行人員">隨行人員</option>
                         </select>
                     </div>
                     <div id="cohort-group" class="mb-3" style="display:none;">
@@ -45,14 +47,15 @@
                     </div>
                     <div class="mb-3">
                         <label class="form-label required-label">姓名</label>
-                        <input type="text" id="name" class="form-control" placeholder="輸入姓名或英文名" required>
+                        <input type="text" id="name" class="form-control" placeholder="例如：王小明" required>
+                        <div class="form-text text-danger mt-1">※ 為加速系統比對，請輸入「中文名字」</div>
                     </div>
                     <button type="submit" class="btn btn-primary w-100">送出報到</button>
                 </div>
             </form>
 
             <form id="supplement-form" style="display:none;" onsubmit="event.preventDefault(); submitSupplement();">
-                <div class="mb-4 text-center"><h5>名單比對失敗，請填寫補件資訊</h5></div>
+                <div class="mb-4 text-center"><h5>請填寫公司資訊</h5></div>
                 <div class="mb-3">
                     <label class="form-label required-label">公司名稱</label>
                     <input type="text" id="company" class="form-control" required placeholder="例如: 某某科技">
@@ -68,20 +71,20 @@
         </div>
     </div>
 
-    <!-- 腳本置底，確保 DOM 已準備就緒[cite: 5] -->
     <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-database-compat.js"></script>
 
     <script>
         const firebaseConfig = {
-            apiKey: "AIzaSyAOP0elxmO2sYfIzEVfWL-wFSbKG6XjFL4",
-            authDomain: "aama-checkin-system.firebaseapp.com",
-            databaseURL: "https://aama-checkin-system-default-rtdb.asia-southeast1.firebasedatabase.app/",
-            projectId: "aama-checkin-system",
-            storageBucket: "aama-checkin-system.firebasestorage.app",
-            messagingSenderId: "979394114808",
-            appId: "1:979394114808:web:7be3eaaaf344f46526b70d"
+          apiKey: "AIzaSyDvyQzuEo-r93LboQqW3fsVtls0N3JoQLc",
+          authDomain: "aama-checkin-system-e7019.firebaseapp.com",
+          databaseURL: "https://aama-checkin-system-e7019-default-rtdb.asia-southeast1.firebasedatabase.app",
+          projectId: "aama-checkin-system-e7019",
+          storageBucket: "aama-checkin-system-e7019.firebasestorage.app",
+          messagingSenderId: "634288046034",
+          appId: "1:634288046034:web:4dff59ee9be7981fdbd20b"
         };
+
         firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
 
@@ -96,47 +99,53 @@
         }
 
         function handleCheckIn() {
-            const role = document.getElementById('role').value;
-            const rawName = document.getElementById('name').value.trim();
-            const cohortInput = document.getElementById('cohort').value.trim();
+    const role = document.getElementById('role').value;
+    const rawName = document.getElementById('name').value.trim();
+    const cohortInput = document.getElementById('cohort').value.trim();
 
-            if (role === '學員' && (parseInt(cohortInput) < 1 || !cohortInput)) {
-                alert("請輸入正確期數"); return;
+    if (role === '學員' && (parseInt(cohortInput) < 1 || !cohortInput)) {
+        alert("請輸入正確期數"); return;
+    }
+
+    db.ref('participants').once('value', (snapshot) => {
+        let matchedUser = null, matchedKey = null;
+        let matchCount = 0; 
+        const cleanInput = rawName.replace(/\s+/g, '').toLowerCase();
+
+        snapshot.forEach((child) => {
+            const data = child.val();
+            const dbName = (data.name || "").replace(/\s+/g, '').toLowerCase();
+            const dbEngName = (data.englishName || "").replace(/\s+/g, '').toLowerCase();
+            const nameMatch = (dbName !== "" && cleanInput.includes(dbName)) || 
+                              (dbEngName !== "" && cleanInput.includes(dbEngName)) || 
+                              (cleanInput !== "" && (dbName + dbEngName).includes(cleanInput));
+
+            if (nameMatch && data.role === role) {
+                if (role === '學員' && String(data.cohort) !== String(cohortInput)) return;
+                
+                matchCount++;
+                matchedUser = data; 
+                matchedKey = child.key;
             }
+        });
 
-            db.ref('participants').once('value', (snapshot) => {
-                let matchedUser = null, matchedKey = null;
-                // 全去空格比對邏輯
-                const cleanInput = rawName.replace(/\s+/g, '').toLowerCase();
-
-                snapshot.forEach((child) => {
-                    const data = child.val();
-                    const dbName = (data.name || "").replace(/\s+/g, '').toLowerCase();
-                    const dbEngName = (data.englishName || "").replace(/\s+/g, '').toLowerCase();
-                    const nameMatch = (dbName !== "" && cleanInput.includes(dbName)) || 
-                                      (dbEngName !== "" && cleanInput.includes(dbEngName)) || 
-                                      (cleanInput !== "" && (dbName + dbEngName).includes(cleanInput));
-
-                    if (nameMatch && data.role === role) {
-                        if (role === '學員' && String(data.cohort) !== String(cohortInput)) return;
-                        matchedUser = data; matchedKey = child.key;
-                    }
-                });
-
-                if (matchedUser) {
-                    if (matchedUser.checked) { alert("您已完成報到"); return; }
-                    let remark = matchedUser.isRegistered === "否" ? "未報名！" : (matchedUser.note || "");
-                    db.ref('participants/' + matchedKey).update({
-                        checked: true, inputName: rawName, checkTime: Date.now(), note: remark
-                    });
-                    if(matchedUser.isVIP === "是") db.ref('chats').push({ user: "系統", msg: `📢 VIP [${matchedUser.name}] 已報到！`, time: new Date().toLocaleTimeString() });
-                    showSuccess();
-                } else {
-                    document.getElementById('checkin-form').style.display = 'none';
-                    document.getElementById('supplement-form').style.display = 'block';
-                }
+        if (matchCount === 1 && matchedUser) {
+            if (matchedUser.checked) { alert("您已完成報到"); return; }
+            let remark = matchedUser.isRegistered === "否" ? "未報名！" : (matchedUser.note || "");
+            db.ref('participants/' + matchedKey).update({
+                checked: true, inputName: rawName, checkTime: Date.now(), note: remark
             });
+            if(matchedUser.isVIP === "是") db.ref('chats').push({ user: "系統", msg: `📢 VIP [${matchedUser.name}] 已報到！`, time: new Date().toLocaleTimeString() });
+            showSuccess();
+        } else {
+            // 【核心修正】在切換到補件頁面前，強制解除期數的必填限制，防止瀏覽器卡死
+            document.getElementById('cohort').required = false;
+            
+            document.getElementById('checkin-view').style.display = 'none';
+            document.getElementById('supplement-form').style.display = 'block';
         }
+    });
+}
 
         function submitSupplement() {
             db.ref('participants').push({
@@ -145,7 +154,7 @@
                 role: document.getElementById('role').value,
                 company: document.getElementById('company').value,
                 cohort: document.getElementById('cohort').value,
-                checked: true, isVIP: "否", note: "手動補件", checkTime: Date.now()
+                checked: true, isVIP: "否", note: "手動補件", isRegistered: "否", checkTime: Date.now()
             });
             showSuccess();
         }
